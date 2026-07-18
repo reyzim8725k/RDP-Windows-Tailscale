@@ -1,0 +1,194 @@
+name: PC criado pelo @alves7.pcm
+
+on:
+
+  workflow_dispatch:
+  
+    inputs:
+    
+      instance_number:
+      
+        description: 'Instance Number (1-10)'
+        
+        required: true
+        
+        default: '1'
+        
+        type: string
+        
+
+
+jobs:
+
+  deploy-rdp:
+  
+    runs-on: windows-latest
+    
+    timeout-minutes: 360
+    
+    steps:
+    
+      - name: Checkout Repository
+      
+        uses: actions/checkout@v4
+        
+      - name: System Information
+      
+        run: |
+        
+          Write-Host "=== ENIGMANO RDP DEPLOYMENT ===" -ForegroundColor Green
+          
+          Write-Host "Instance Number: ${{ github.event.inputs.instance_number }}" -ForegroundColor Yellow
+          
+          Write-Host "Runner: $env:RUNNER_NAME" -ForegroundColor Yellow
+          
+          Write-Host "Workflow: $env:GITHUB_WORKFLOW" -ForegroundColor Yellow
+          
+          Write-Host "`n=== SYSTEM SPECIFICATIONS ===" -ForegroundColor Cyan
+          
+          Get-ComputerInfo | Select-Object WindowsProductName, WindowsVersion, TotalPhysicalMemory
+          
+          Get-WmiObject -Class Win32_Processor | Select-Object Name, NumberOfCores, NumberOfLogicalProcessors
+          
+      - name: Enable RDP
+      
+        run: |
+        
+          Write-Host "Enabling Remote Desktop..." -ForegroundColor Green
+          
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+          
+      - name: Create User Account
+      
+        run: |
+        
+          Write-Host "Setting up user account..." -ForegroundColor Green
+          
+          $Password = ConvertTo-SecureString "P@ssw0rd!" -AsPlainText -Force
+          
+          New-LocalUser -Name "runneradmin" -Password $Password -Description "RDP User"
+          
+          Add-LocalGroupMember -Group "Administrators" -Member "runneradmin"
+          
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "runneradmin"
+          
+      - name: Install Tailscale (Silent)
+      
+        run: |
+        
+          Write-Host "Downloading Tailscale..." -ForegroundColor Green
+          
+          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -OutFile "tailscale-setup.exe"
+          
+          Write-Host "Installing Tailscale silently..." -ForegroundColor Green
+          
+          Start-Process -FilePath "tailscale-setup.exe" -ArgumentList "/quiet", "/norestart" -Wait
+          
+          Write-Host "Tailscale installed successfully!" -ForegroundColor Green
+          
+      - name: Start Tailscale
+      
+        run: |
+        
+          Write-Host "Starting Tailscale..." -ForegroundColor Green
+          
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey ${{ secrets.TAILSCALE_AUTH_KEY }}
+          
+      - name: Get Tailscale IP
+      
+        run: |
+        
+          $tailscaleIP = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
+          
+          Write-Host "Tailscale IP: $tailscaleIP" -ForegroundColor Green
+          
+      - name: Install Google Chrome (Direct)
+      
+        run: |
+        
+          Write-Host "Downloading Google Chrome..." -ForegroundColor Green
+          
+          $Path = "$env:TEMP\chrome_installer.exe"
+          
+          Invoke-WebRequest -Uri "https://dl.google.com/chrome/install/375.126/chrome_installer.exe" -OutFile $Path
+          
+          Write-Host "Installing Google Chrome silently..." -ForegroundColor Green
+          
+          Start-Process -FilePath $Path -ArgumentList "/silent", "/install" -Wait
+          
+          Write-Host "Google Chrome installed!" -ForegroundColor Green
+          
+      - name: Install 7-Zip (Direct)
+      
+        run: |
+        
+          Write-Host "Downloading 7-Zip..." -ForegroundColor Green
+          
+          Invoke-WebRequest -Uri "https://www.7-zip.org/a/7z2409-x64.exe" -OutFile "7z-setup.exe"
+          
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
