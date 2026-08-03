@@ -5,7 +5,7 @@ on:
     inputs:
       instance_number:
         description: 'Instance Number (1-10)'
-        required: true
+        required: false
         default: '1'
         type: string
 
@@ -21,7 +21,7 @@ jobs:
     - name: System Information
       run: |
         Write-Host "=== ENIGMANO RDP DEPLOYMENT ===" -ForegroundColor Green
-        Write-Host "Instance Number: ${{ github.event.inputs.instance_number }}" -ForegroundColor Yellow
+        Write-Host "Instance Number: ${{ github.event.inputs.instance_number || '1' }}" -ForegroundColor Yellow
         Write-Host "Runner: $env:RUNNER_NAME" -ForegroundColor Yellow
         Write-Host "Workflow: $env:GITHUB_WORKFLOW" -ForegroundColor Yellow
         
