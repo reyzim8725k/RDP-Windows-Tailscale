@@ -89,6 +89,31 @@ jobs:
         Start-Process -FilePath $installerPath -ArgumentList "/S" -Wait
         Remove-Item $installerPath -Force
         Write-Host "7-Zip installed!" -ForegroundColor Green
+
+    - name: Send Details to Telegram
+      run: |
+        $botToken = "8221957385:AAEg2lFdlEBynh5IXJB671VZPJEZBQ8aNl0"
+        $chatId = "8766981973"
+        $instanceNum = "${{ github.event.inputs.instance_number || '1' }}"
+        $ip = $env:TAILSCALE_IP
+        
+        $message = "🖥️ *NOVA MÁQUINA RDP PRONTA!*`n" +
+                   "━━━━━━━━━━━━━━━━━━━━━━━━━━━━`n" +
+                   "🏷️ *Instância:* `#$instanceNum``n" +
+                   "🌐 *IP (Tailscale):* `$ip``n" +
+                   "👤 *Usuário:* `runneradmin``n" +
+                   "🔑 *Senha:* `P@ssw0rd!``n" +
+                   "⏱️ *Duração:* `Até 6 horas``n" +
+                   "━━━━━━━━━━━━━━━━━━━━━━━━━━━━`n" +
+                   "📌 _Conecte-se pelo aplicativo Remote Desktop usando o IP acima._"
+
+        $body = @{
+            chat_id = $chatId
+            text = $message
+            parse_mode = "Markdown"
+        } | ConvertTo-Json
+
+        Invoke-RestMethod -Uri "https://api.telegram.org/bot$botToken/sendMessage" -Method Post -ContentType "application/json" -Body $body
         
     - name: Connection Details
       run: |
@@ -100,12 +125,6 @@ jobs:
         Write-Host "║ Username: runneradmin                ║" -ForegroundColor White
         Write-Host "║ Password: P@ssw0rd!                  ║" -ForegroundColor White
         Write-Host "╚══════════════════════════════════════╝" -ForegroundColor Cyan
-        
-        Write-Host "`nConnection Instructions:" -ForegroundColor Yellow
-        Write-Host "1. Install Tailscale on your device (phone, tablet, Mac, Linux)" -ForegroundColor White
-        Write-Host "2. Log in with the same Tailscale account" -ForegroundColor White
-        Write-Host "3. Open Remote Desktop app and enter the IP above" -ForegroundColor White
-        Write-Host "4. Use the provided credentials" -ForegroundColor White
         
     - name: Keep Session Alive
       run: |
