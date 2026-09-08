@@ -97,23 +97,24 @@ jobs:
         $instanceNum = "${{ github.event.inputs.instance_number || '1' }}"
         $ip = $env:TAILSCALE_IP
         
-        $message = "🖥️ *NOVA MÁQUINA RDP PRONTA!*`n" +
+        $msgText = "🖥️ <b>NOVA MÁQUINA RDP PRONTA!</b>`n" +
                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━`n" +
-                   "🏷️ *Instância:* `#$instanceNum``n" +
-                   "🌐 *IP (Tailscale):* `$ip``n" +
-                   "👤 *Usuário:* `runneradmin``n" +
-                   "🔑 *Senha:* `P@ssw0rd!``n" +
-                   "⏱️ *Duração:* `Até 6 horas``n" +
+                   "🏷️ <b>Instância:</b> <code>#$instanceNum</code>`n" +
+                   "🌐 <b>IP (Tailscale):</b> <code>$ip</code>`n" +
+                   "👤 <b>Usuário:</b> <code>runneradmin</code>`n" +
+                   "🔑 <b>Senha:</b> <code>P@ssw0rd!</code>`n" +
+                   "⏱️ <b>Duração:</b> <code>Até 6 horas</code>`n" +
                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━`n" +
-                   "📌 _Conecte-se pelo aplicativo Remote Desktop usando o IP acima._"
+                   "📌 <i>Conecte-se pelo aplicativo Remote Desktop usando o IP acima.</i>"
 
-        $body = @{
+        $payload = @{
             chat_id = $chatId
-            text = $message
-            parse_mode = "Markdown"
-        } | ConvertTo-Json
+            text = $msgText
+            parse_mode = "HTML"
+        } | ConvertTo-Json -Compress
 
-        Invoke-RestMethod -Uri "https://api.telegram.org/bot$botToken/sendMessage" -Method Post -ContentType "application/json" -Body $body
+        [System.Text.Encoding]::UTF8.GetBytes($payload) | Out-Null
+        Invoke-RestMethod -Uri "https://api.telegram.org/bot$botToken/sendMessage" -Method Post -ContentType "application/json; charset=utf-8" -Body $payload
         
     - name: Connection Details
       run: |
