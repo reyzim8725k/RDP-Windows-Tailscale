@@ -1,4 +1,4 @@
-name: PC criado pelo @alves7.pcm
+name: PC criado pelo @alves7.pcm (RDP + VNC Tailscale)
 
 on:
   workflow_dispatch:
@@ -9,143 +9,150 @@ on:
         default: '1'
         type: string
 
+env:
+  VNC_PASSWORD: ${{ secrets.VNC_PASSWORD || 'P@ssw0rd' }}
+  TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY || secrets.TAILSCALE_AUTHKEY || vars.TAILSCALE_AUTH_KEY || vars.TAILSCALE_AUTHKEY }}
+  TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || '8221957385:AAEg2lFdlEBynh5IXJB671VZPJEZBQ8aNl0' }}
+  TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID || '8766981973' }}
+
 jobs:
-  deploy-rdp:
+  deploy-rdp-vnc:
     runs-on: windows-latest
     timeout-minutes: 360
-    
+
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
-      
-    - name: System Information
-      run: |
-        Write-Host "=== ENIGMANO RDP DEPLOYMENT ===" -ForegroundColor Green
-        Write-Host "Instance Number: ${{ github.event.inputs.instance_number || '1' }}" -ForegroundColor Yellow
-        Write-Host "Runner: $env:RUNNER_NAME" -ForegroundColor Yellow
-        Write-Host "Workflow: $env:GITHUB_WORKFLOW" -ForegroundColor Yellow
-        
-        Write-Host "`n=== SYSTEM SPECIFICATIONS ===" -ForegroundColor Cyan
-        Get-ComputerInfo | Select-Object WindowsProductName, WindowsVersion, TotalPhysicalMemory
-        Get-WmiObject -Class Win32_Processor | Select-Object Name, NumberOfCores, NumberOfLogicalProcessors
-        
-    - name: Enable RDP
-      run: |
-        Write-Host "Enabling Remote Desktop..." -ForegroundColor Green
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
-        
-    - name: Create User Account
-      run: |
-        Write-Host "Setting up user account..." -ForegroundColor Green
-        $Password = ConvertTo-SecureString "P@ssw0rd!" -AsPlainText -Force
-        Set-LocalUser -Name "runneradmin" -Password $Password
-        Add-LocalGroupMember -Group "Remote Desktop Users" -Member "runneradmin"
-        Write-Host "Username: runneradmin" -ForegroundColor Yellow
-        Write-Host "Password: P@ssw0rd!" -ForegroundColor Yellow
-        
-    - name: Install Tailscale (Silent)
-      run: |
-        Write-Host "Downloading Tailscale..." -ForegroundColor Green
-        $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
-        $installerPath = "$env:TEMP\tailscale.msi"
-        Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath
-        Write-Host "Installing Tailscale silently..." -ForegroundColor Green
-        Start-Process msiexec.exe -ArgumentList "/i `"$installerPath`" /quiet /norestart" -Wait
-        Remove-Item $installerPath -Force
-        Write-Host "Tailscale installed successfully!" -ForegroundColor Green
-        
-    - name: Start Tailscale
-      run: |
-        Write-Host "Starting Tailscale..." -ForegroundColor Green
-        & "C:\Program Files\Tailscale\tailscale.exe" up --authkey ${{ secrets.TAILSCALE_AUTH_KEY }} --hostname "enigmano-${{ github.run_id }}"
-        Start-Sleep -Seconds 15
-        
-    - name: Get Tailscale IP
-      run: |
-        $tsIP = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
-        Write-Host "Tailscale IP: $tsIP" -ForegroundColor Green
-        echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
-        
-    - name: Install Google Chrome (Direct)
-      run: |
-        Write-Host "Downloading Google Chrome..." -ForegroundColor Green
-        $chromeUrl = "https://dl.google.com/chrome/install/latest/chrome_installer.exe"
-        $installerPath = "$env:TEMP\chrome_installer.exe"
-        Invoke-WebRequest -Uri $chromeUrl -OutFile $installerPath
-        Write-Host "Installing Google Chrome silently..." -ForegroundColor Green
-        Start-Process -FilePath $installerPath -ArgumentList "/silent /install" -Wait
-        Remove-Item $installerPath -Force
-        Write-Host "Google Chrome installed!" -ForegroundColor Green
-        
-    - name: Install 7-Zip (Direct)
-      run: |
-        Write-Host "Downloading 7-Zip..." -ForegroundColor Green
-        $zipUrl = "https://www.7-zip.org/a/7z2409-x64.exe"
-        $installerPath = "$env:TEMP\7z-installer.exe"
-        Invoke-WebRequest -Uri $zipUrl -OutFile $installerPath
-        Write-Host "Installing 7-Zip silently..." -ForegroundColor Green
-        Start-Process -FilePath $installerPath -ArgumentList "/S" -Wait
-        Remove-Item $installerPath -Force
-        Write-Host "7-Zip installed!" -ForegroundColor Green
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - name: Send Details to Telegram
-      run: |
-        $botToken = "8221957385:AAEg2lFdlEBynh5IXJB671VZPJEZBQ8aNl0"
-        $chatId = "8766981973"
-        $instanceNum = "${{ github.event.inputs.instance_number || '1' }}"
-        $ip = $env:TAILSCALE_IP
-        
-        $msgText = "🖥️ <b>NOVA MÁQUINA RDP PRONTA!</b>`n" +
-                   "━━━━━━━━━━━━━━━━━━━━━━━━━━━━`n" +
-                   "🏷️ <b>Instância:</b> <code>#$instanceNum</code>`n" +
-                   "🌐 <b>IP (Tailscale):</b> <code>$ip</code>`n" +
-                   "👤 <b>Usuário:</b> <code>runneradmin</code>`n" +
-                   "🔑 <b>Senha:</b> <code>P@ssw0rd!</code>`n" +
-                   "⏱️ <b>Duração:</b> <code>Até 6 horas</code>`n" +
-                   "━━━━━━━━━━━━━━━━━━━━━━━━━━━━`n" +
-                   "📌 <i>Conecte-se pelo aplicativo Remote Desktop usando o IP acima.</i>"
+      - name: System Information
+        shell: pwsh
+        run: |
+          Write-Host '=== RDP + VNC VIA TAILSCALE ===' -ForegroundColor Green
+          Write-Host "Instance Number: ${{ github.event.inputs.instance_number || '1' }}" -ForegroundColor Yellow
+          Write-Host "Runner: $env:RUNNER_NAME" -ForegroundColor Yellow
+          Get-ComputerInfo | Select-Object WindowsProductName, WindowsVersion, TotalPhysicalMemory
 
-        $payload = @{
-            chat_id = $chatId
-            text = $msgText
-            parse_mode = "HTML"
-        } | ConvertTo-Json -Compress
+      - name: Enable RDP
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name fDenyTSConnections -Value 0
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name UserAuthentication -Value 1
+          Enable-NetFirewallRule -DisplayGroup 'Remote Desktop'
 
-        [System.Text.Encoding]::UTF8.GetBytes($payload) | Out-Null
-        Invoke-RestMethod -Uri "https://api.telegram.org/bot$botToken/sendMessage" -Method Post -ContentType "application/json; charset=utf-8" -Body $payload
-        
-    - name: Connection Details
-      run: |
-        Write-Host "`n=== CONNECTION DETAILS (TAILSCALE) ===" -ForegroundColor Green
-        Write-Host "╔══════════════════════════════════════╗" -ForegroundColor Cyan
-        Write-Host "║         ENIGMANO RDP ACCESS          ║" -ForegroundColor Cyan  
-        Write-Host "╠══════════════════════════════════════╣" -ForegroundColor Cyan
-        Write-Host "║ Host: $env:TAILSCALE_IP              ║" -ForegroundColor White
-        Write-Host "║ Username: runneradmin                ║" -ForegroundColor White
-        Write-Host "║ Password: P@ssw0rd!                  ║" -ForegroundColor White
-        Write-Host "╚══════════════════════════════════════╝" -ForegroundColor Cyan
-        
-    - name: Keep Session Alive
-      run: |
-        Write-Host "`n=== SESSION ACTIVE ===" -ForegroundColor Green
-        Write-Host "EnigMano RDP instance is now running!" -ForegroundColor Cyan
-        Write-Host "Instance will remain active for up to 6 hours." -ForegroundColor Yellow
-        Write-Host "Do not close this window to maintain the connection." -ForegroundColor Red
-        
-        $counter = 0
-        while ($true) {
-          $counter++
-          Write-Host "Session active - Heartbeat #$counter ($(Get-Date))" -ForegroundColor Green
-          
-          $tsStatus = & "C:\Program Files\Tailscale\tailscale.exe" status
-          if ($tsStatus -match "active") {
-            Write-Host "Tailscale status: ACTIVE" -ForegroundColor Green
-          } else {
-            Write-Host "Tailscale status: ERROR - Restarting..." -ForegroundColor Red
-            & "C:\Program Files\Tailscale\tailscale.exe" up --authkey ${{ secrets.TAILSCALE_AUTH_KEY }} --hostname "enigmano-${{ github.run_id }}"
+      - name: Create User Account
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $password = ConvertTo-SecureString 'P@ssw0rd!' -AsPlainText -Force
+          Set-LocalUser -Name runneradmin -Password $password
+          Add-LocalGroupMember -Group 'Remote Desktop Users' -Member runneradmin -ErrorAction SilentlyContinue
+
+      - name: Install Tailscale
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installerPath = Join-Path $env:TEMP 'tailscale.msi'
+          Invoke-WebRequest -Uri 'https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi' -OutFile $installerPath -TimeoutSec 60
+          $install = Start-Process msiexec.exe -ArgumentList @('/i', $installerPath, '/quiet', '/norestart') -PassThru
+          if (-not $install.WaitForExit(120000)) {
+            Stop-Process -Id $install.Id -Force -ErrorAction SilentlyContinue
+            throw 'A instalação do Tailscale excedeu 120 segundos.'
           }
-          
-          Start-Sleep -Seconds 60
-        }
+          if ($install.ExitCode -notin @(0, 3010)) {
+            throw "A instalação do Tailscale falhou com código $($install.ExitCode)."
+          }
+          Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
+
+      - name: Connect Tailscale
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:TAILSCALE_AUTH_KEY)) {
+            throw 'Configure o segredo TAILSCALE_AUTH_KEY no repositório.'
+          }
+          $tailscale = 'C:\Program Files\Tailscale\tailscale.exe'
+          if (-not (Test-Path $tailscale)) {
+            throw 'tailscale.exe não foi encontrado após a instalação.'
+          }
+          & $tailscale up --authkey=$env:TAILSCALE_AUTH_KEY --hostname="enigmano-${{ github.run_id }}" --accept-routes=false
+          if ($LASTEXITCODE -ne 0) { throw "tailscale up falhou com código $LASTEXITCODE." }
+          Start-Sleep -Seconds 10
+          $tsIp = ((& $tailscale ip -4) | Select-Object -First 1).ToString().Trim()
+          if ($tsIp -notmatch '^100\.') { throw "IP Tailscale inválido ou ausente: $tsIp" }
+          "TAILSCALE_IP=$tsIp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Tailscale IP: $tsIp" -ForegroundColor Green
+
+      - name: Start Portable UltraVNC
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:VNC_PASSWORD) -or $env:VNC_PASSWORD.Length -gt 8) {
+            throw 'VNC_PASSWORD deve ter entre 1 e 8 caracteres.'
+          }
+
+          $vncDir = Join-Path $env:RUNNER_TEMP 'ultravnc'
+          $zip = Join-Path $env:TEMP 'UltraVNC_1822.zip'
+          $passwordZip = Join-Path $env:TEMP 'createpassword.zip'
+          $passwordDir = Join-Path $env:TEMP 'createpassword'
+          Invoke-WebRequest -Uri 'https://uvnc.eu/download/1800/UltraVNC_1822.zip' -OutFile $zip -TimeoutSec 60
+          Expand-Archive -LiteralPath $zip -DestinationPath $vncDir -Force
+          $vncBin = Join-Path $vncDir 'x64'
+          $winvnc = Join-Path $vncBin 'winvnc.exe'
+          if (-not (Test-Path $winvnc)) { throw 'winvnc.exe não foi encontrado.' }
+
+          New-Item -ItemType File -Path (Join-Path $vncBin 'ultravnc.portable') -Force | Out-Null
+          Invoke-WebRequest -Uri 'https://uvnc.eu/download/133/createpassword.zip' -OutFile $passwordZip -TimeoutSec 60
+          Expand-Archive -LiteralPath $passwordZip -DestinationPath $passwordDir -Force
+          $createPassword = Get-ChildItem -Path $passwordDir -Filter createpassword.exe -Recurse | Select-Object -First 1
+          if (-not $createPassword) { throw 'createpassword.exe não foi encontrado.' }
+
+          Push-Location $vncBin
+          try {
+            & $createPassword.FullName '-secure' $env:VNC_PASSWORD
+            if ($LASTEXITCODE -ne 0) { throw "createpassword.exe falhou com código $LASTEXITCODE." }
+          } finally { Pop-Location }
+
+          New-NetFirewallRule -DisplayName 'UltraVNC via Tailscale' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 5900 -RemoteAddress '100.64.0.0/10' -Profile Any -ErrorAction SilentlyContinue | Out-Null
+          $vncProcess = Start-Process -FilePath $winvnc -ArgumentList @('-run') -WorkingDirectory $vncBin -PassThru
+          Start-Sleep -Seconds 8
+          if ($vncProcess.HasExited) { throw 'O UltraVNC encerrou imediatamente.' }
+          $listener = Get-NetTCPConnection -LocalPort 5900 -State Listen -ErrorAction SilentlyContinue
+          if (-not $listener) { throw 'O UltraVNC não abriu a porta 5900.' }
+          Write-Host "VNC ativo em $env:TAILSCALE_IP:5900" -ForegroundColor Green
+
+      - name: Send Connection Details to Telegram
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:TELEGRAM_BOT_TOKEN) -or [string]::IsNullOrWhiteSpace($env:TELEGRAM_CHAT_ID)) {
+            throw 'Configure TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID.'
+          }
+          $instanceNum = '${{ github.event.inputs.instance_number || '1' }}'
+          $message = "<b>PC REMOTO PRONTO</b>`n" +
+                     "━━━━━━━━━━━━━━━━━━━━━━━━━━━━`n" +
+                     "<b>Instância:</b> <code>#$instanceNum</code>`n" +
+                     "<b>VNC IP Tailscale:</b> <code>$env:TAILSCALE_IP</code>`n" +
+                     "<b>VNC Porta:</b> <code>5900</code>`n" +
+                     "<b>VNC Senha:</b> <code>$env:VNC_PASSWORD</code>`n" +
+                     "━━━━━━━━━━━━━━━━━━━━━━━━━━━━`n" +
+                     "<b>RDP IP:</b> <code>$env:TAILSCALE_IP</code>`n" +
+                     "<b>RDP Usuário:</b> <code>runneradmin</code>`n" +
+                     "<b>RDP Senha:</b> <code>P@ssw0rd!</code>`n" +
+                     "━━━━━━━━━━━━━━━━━━━━━━━━━━━━`n" +
+                     "Use um cliente VNC em <code>$env:TAILSCALE_IP:5900</code>."
+          $payload = @{ chat_id = $env:TELEGRAM_CHAT_ID; text = $message; parse_mode = 'HTML' } | ConvertTo-Json -Compress
+          Invoke-RestMethod -Uri "https://api.telegram.org/bot$($env:TELEGRAM_BOT_TOKEN)/sendMessage" -Method Post -ContentType 'application/json; charset=utf-8' -Body $payload
+
+      - name: Keep Session Alive
+        shell: pwsh
+        run: |
+          $tailscale = 'C:\Program Files\Tailscale\tailscale.exe'
+          $count = 0
+          while ($true) {
+            $count++
+            $state = (& $tailscale status 2>$null | Out-String)
+            Write-Host "Sessão ativa #$count - Tailscale IP $env:TAILSCALE_IP - $(Get-Date)" -ForegroundColor Green
+            if ($state -notmatch '100\.') { Write-Host 'Tailscale não está conectado.' -ForegroundColor Red }
+            Start-Sleep -Seconds 60
+          }
